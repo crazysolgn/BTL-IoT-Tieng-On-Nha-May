@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "factory": {
+      ".read": true,
+      ".write": true,
+      "history": { ".indexOn": ["timestamp"] },
+      "alerts":  { ".indexOn": ["timestamp"] }
+    }
+  }
+}

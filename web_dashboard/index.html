@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giám sát tiếng ồn nhà máy – An toàn lao động</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root{--bg:#f1f4f9;--card:#fff;--text:#1f2937;--muted:#6b7280;--safe:#16a34a;--warn:#eab308;--danger:#dc2626;--crit:#7f1d1d;--raw:#94a3b8;--flt:#2563eb;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:linear-gradient(90deg,#111827,#1f2937 60%,#374151);color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #f59e0b}
+  header h1{margin:0;font-size:21px}
+  header .sub{font-size:12.5px;opacity:.8;margin-top:2px}
+  .status{font-size:13px;padding:6px 12px;border-radius:20px;background:rgba(255,255,255,.12)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#fbbf24}.dot.on{background:#34d399}
+  main{padding:18px 24px;max-width:1440px;margin:auto}
+  .banner{border-radius:12px;padding:14px 18px;color:#fff;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-size:15px}
+  .banner b{font-size:20px}
+  .cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-bottom:16px}
+  .card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.08);min-width:0}
+  .kpi .label{font-size:12.5px;color:var(--muted)}
+  .kpi .value{font-size:27px;font-weight:700;margin-top:4px}
+  .kpi .unit{font-size:14px;color:var(--muted);font-weight:400}
+  .kpi .hint{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+  .grid>*{min-width:0}
+  .c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}.c6{grid-column:span 6}.c5{grid-column:span 5}.c4{grid-column:span 4}
+  .card h3{margin:0 0 10px;font-size:14.5px}
+  .card h3 small{color:var(--muted);font-weight:400}
+  .chart-box{position:relative;height:280px}
+  .gauge-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .gauge-row>*{min-width:0}
+  .gauge{position:relative;height:150px}
+  .gauge .gv{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-weight:700;font-size:19px}
+  .gl{text-align:center;font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid #eef0f4;text-align:center}
+  th{background:#f8fafc;color:var(--muted);font-weight:600}
+  .tag{display:inline-block;padding:2px 8px;border-radius:10px;color:#fff;font-size:11.5px;font-weight:600}
+  .legend-q{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:12px}
+  @media(max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.c8,.c7,.c6,.c5,.c4{grid-column:span 12}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Hệ thống giám sát &amp; lọc tiếng ồn – An toàn lao động nhà máy</h1>
+    <div class="sub">ESP32 · Micro MAX4466 · DHT11 · Lọc trung vị + EMA · Firebase · Ngưỡng theo QCVN 24:2016/BYT &amp; QCVN 26:2016/BYT · Vị trí: <span id="devName">xuong-dap-01</span></div>
+  </div>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Đang kết nối...</span></div>
+</header>
+
+<main>
+  <div class="banner" id="banner" style="background:#6b7280"><div><b id="bannerTitle">--</b><div id="bannerMsg" style="font-size:13.5px;margin-top:3px">--</div></div><div style="text-align:right;font-size:13px">Cập nhật lúc<br><b id="vTime" style="font-size:17px">--</b></div></div>
+
+  <div class="cards">
+    <div class="card kpi"><div class="label">LAeq hiện tại (đã lọc)</div><div class="value"><span id="vLeq">--</span><span class="unit"> dBA</span></div><div class="hint">Mức âm tương đương 10 s</div></div>
+    <div class="card kpi"><div class="label">Lmax (tín hiệu thô)</div><div class="value"><span id="vLmax">--</span><span class="unit"> dBA</span></div><div class="hint">Giới hạn tuyệt đối 115 dBA</div></div>
+    <div class="card kpi"><div class="label">Liều ồn tích lũy trong ca</div><div class="value"><span id="vDose">--</span><span class="unit"> %</span></div><div class="hint">100 % = 85 dBA trong 8 giờ</div></div>
+    <div class="card kpi"><div class="label">Thời gian cho phép ở mức hiện tại</div><div class="value" style="font-size:23px"><span id="vAllowed">--</span></div><div class="hint">T = 8 h / 2<sup>(L−85)/3</sup></div></div>
+    <div class="card kpi"><div class="label">Nhiệt độ</div><div class="value"><span id="vTemp">--</span><span class="unit"> °C</span></div><div class="hint">Cho phép 18–32 °C (LĐ trung bình)</div></div>
+    <div class="card kpi"><div class="label">Độ ẩm</div><div class="value"><span id="vHumi">--</span><span class="unit"> %</span></div><div class="hint">Cho phép 40–80 %</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card c8"><h3>1. Hiệu quả lọc tiếng ồn – Tín hiệu thô và sau lọc <small>(Line plot + đường ngưỡng 80/85 dBA)</small></h3>
+      <div class="chart-box" style="height:300px"><canvas id="filterChart"></canvas></div></div>
+    <div class="card c4"><h3>2. Đồng hồ đo <small>(Gauge)</small></h3>
+      <div class="gauge-row">
+        <div><div class="gauge"><canvas id="gLeq"></canvas><div class="gv" id="gvLeq">--</div></div><div class="gl">LAeq (30–120 dBA)</div></div>
+        <div><div class="gauge"><canvas id="gDose"></canvas><div class="gv" id="gvDose">--</div></div><div class="gl">Liều ồn (0–200 %)</div></div>
+      </div>
+      <div class="legend-q"><span class="tag" style="background:var(--safe)">AN TOÀN</span> &lt; 80 dBA &nbsp; <span class="tag" style="background:var(--warn)">CẢNH BÁO</span> 80–85<br>
+        <span class="tag" style="background:var(--danger)">NGUY HIỂM</span> ≥ 85 dBA &nbsp; <span class="tag" style="background:var(--crit)">KHẨN CẤP</span> Lmax &gt; 115</div>
+      <h3 style="margin-top:12px">Thống kê ca làm việc</h3>
+      <table id="statTable"></table>
+    </div>
+
+    <div class="card c6"><h3>3. Liều ồn tích lũy trong ca <small>(Area chart, ngưỡng 100 %)</small></h3>
+      <div class="chart-box"><canvas id="doseChart"></canvas></div></div>
+    <div class="card c6"><h3>4. LAeq trung bình theo từng giờ <small>(Bar chart, màu theo mức nguy hiểm)</small></h3>
+      <div class="chart-box"><canvas id="hourChart"></canvas></div></div>
+
+    <div class="card c4"><h3>5. Phân bố mức ồn <small>(Histogram, bước 5 dB)</small></h3>
+      <div class="chart-box"><canvas id="histChart"></canvas></div></div>
+    <div class="card c4"><h3>6. Tỷ lệ thời gian theo mức nguy hiểm <small>(Pie)</small></h3>
+      <div class="chart-box"><canvas id="pieChart"></canvas></div></div>
+    <div class="card c4"><h3>7. Vi khí hậu – Nhiệt độ &amp; độ ẩm <small>(Line, 2 trục)</small></h3>
+      <div class="chart-box"><canvas id="climateChart"></canvas></div></div>
+
+    <div class="card c5"><h3>8. Số lần cảnh báo theo loại <small>(Doughnut)</small></h3>
+      <div class="chart-box" style="height:250px"><canvas id="alertChart"></canvas></div></div>
+    <div class="card c7"><h3>Nhật ký cảnh báo gần nhất</h3>
+      <table id="alertTable"><thead><tr><th>Thời gian</th><th>Loại</th><th>Giá trị</th><th>Nội dung</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
+<footer>Bài tập lớn môn IoT và Ứng dụng · Giới hạn tiếp xúc theo QCVN 24:2016/BYT: 85 dBA/8 h, quy tắc 3 dB, tối đa 115 dBA</footer>
+
+<script>
+/* ===================== 1. CẤU HÌNH FIREBASE =====================
+   Để nguyên "YOUR_..." -> trang chạy CHẾ ĐỘ DEMO (mô phỏng 1 ca làm việc 06:00–18:00). */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "YOUR_PROJECT",
+};
+const MAX_POINTS = 145;
+const DEMO = firebaseConfig.apiKey.startsWith("YOUR");
+
+/* ===================== 2. HẰNG SỐ & TIỆN ÍCH ===================== */
+const LIMIT = 85, WARN = 80, MAXDB = 115, EXCH = 3;
+const COL = { safe:"#16a34a", warn:"#eab308", danger:"#dc2626", crit:"#7f1d1d", raw:"#94a3b8", flt:"#2563eb", t:"#e4572e", h:"#0ea5e9" };
+const ZONES = [
+  { key:"AN_TOAN",   name:"An toàn (<80)",     color:COL.safe },
+  { key:"CANH_BAO",  name:"Cảnh báo (80–85)",  color:COL.warn },
+  { key:"NGUY_HIEM", name:"Nguy hiểm (≥85)",   color:COL.danger },
+];
+const zoneOf = L => L >= LIMIT ? "NGUY_HIEM" : (L >= WARN ? "CANH_BAO" : "AN_TOAN");
+const zoneColor = L => L >= LIMIT ? COL.danger : (L >= WARN ? COL.warn : COL.safe);
+const allowedHours = L => 8 / Math.pow(2, (L - LIMIT) / EXCH);          // QCVN 24:2016, quy tắc 3 dB
+const fmtAllowed = L => { if (L < WARN) return "Không giới hạn"; const h = allowedHours(L);
+  return h >= 1 ? h.toFixed(1)+" giờ" : (h*60 >= 1 ? (h*60).toFixed(0)+" phút" : (h*3600).toFixed(0)+" giây"); };
+const fmtTime = ts => new Date(ts).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+const leqOf = a => a.length ? 10*Math.log10(avg(a.map(L => Math.pow(10, L/10)))) : 0;   // trung bình năng lượng
+const STATUS_TEXT = {
+  AN_TOAN:["AN TOÀN","Mức ồn dưới 80 dBA – làm việc bình thường",COL.safe],
+  CANH_BAO:["CẢNH BÁO","Mức ồn 80–85 dBA – khuyến nghị đeo nút tai chống ồn",COL.warn],
+  NGUY_HIEM:["NGUY HIỂM","LAeq ≥ 85 dBA – BẮT BUỘC đeo bảo hộ thính giác, hạn chế thời gian tiếp xúc",COL.danger],
+  KHAN_CAP:["KHẨN CẤP","Lmax vượt 115 dBA – rời khu vực, kiểm tra máy móc ngay",COL.crit],
+};
+Chart.defaults.font.family = '"Segoe UI", Arial, sans-serif';
+Chart.defaults.animation.duration = 300;
+const hline = (v, color, label) => ({ label, data:[], borderColor:color, borderDash:[6,4], borderWidth:1.5, pointRadius:0, fill:false });
+
+/* ===================== 3. KHỞI TẠO ĐỒ THỊ ===================== */
+const filterChart = new Chart(document.getElementById("filterChart"), {
+  type:"line",
+  data:{ labels:[], datasets:[
+    { label:"Tín hiệu thô (raw)", data:[], borderColor:COL.raw, backgroundColor:COL.raw, borderWidth:1, pointRadius:0, tension:0 },
+    { label:"Sau lọc trung vị + EMA (LAeq)", data:[], borderColor:COL.flt, backgroundColor:COL.flt, borderWidth:2.5, pointRadius:0, tension:.3 },
+    hline(LIMIT, COL.danger, "Ngưỡng 85 dBA (8 giờ)"),
+    hline(WARN, COL.warn, "Ngưỡng cảnh báo 80 dBA") ]},
+  options:{ maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
+    scales:{ x:{ticks:{maxTicksLimit:13}}, y:{min:50,max:120,title:{display:true,text:"dBA"}} } }
+});
+
+const doseChart = new Chart(document.getElementById("doseChart"), {
+  type:"line",
+  data:{ labels:[], datasets:[
+    { label:"Liều ồn tích lũy (%)", data:[], borderColor:"#7c3aed", backgroundColor:"rgba(124,58,237,.2)", fill:true, pointRadius:0, tension:.2, borderWidth:2 },
+    hline(100, COL.danger, "Giới hạn 100 %") ]},
+  options:{ maintainAspectRatio:false, scales:{ x:{ticks:{maxTicksLimit:10}}, y:{beginAtZero:true,title:{display:true,text:"%"}} } }
+});
+
+const hourChart = new Chart(document.getElementById("hourChart"), {
+  type:"bar",
+  data:{ labels:[], datasets:[ { label:"LAeq theo giờ (dBA)", data:[], backgroundColor:[] }, { type:"line", ...hline(LIMIT, COL.danger, "85 dBA") } ]},
+  options:{ maintainAspectRatio:false, scales:{ y:{min:50,max:110,title:{display:true,text:"dBA"}} } }
+});
+
+const histChart = new Chart(document.getElementById("histChart"), {
+  type:"bar",
+  data:{ labels:[], datasets:[{ label:"Số lần đo", data:[], backgroundColor:[] }]},
+  options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{title:{display:true,text:"Khoảng mức ồn (dBA)"}}, y:{beginAtZero:true} } }
+});
+
+const pieChart = new Chart(document.getElementById("pieChart"), {
+  type:"pie",
+  data:{ labels:ZONES.map(z=>z.name), datasets:[{ data:[0,0,0], backgroundColor:ZONES.map(z=>z.color) }]},
+  options:{ maintainAspectRatio:false, plugins:{ legend:{position:"bottom"},
+    tooltip:{callbacks:{label:c=>{ const s=c.dataset.data.reduce((a,b)=>a+b,0); return `${c.label}: ${(c.raw*100/s).toFixed(1)} % thời gian`; }}} } }
+});
+
+const climateChart = new Chart(document.getElementById("climateChart"), {
+  type:"line",
+  data:{ labels:[], datasets:[
+    { label:"Nhiệt độ (°C)", data:[], borderColor:COL.t, backgroundColor:COL.t, yAxisID:"yT", pointRadius:0, tension:.3, borderWidth:2 },
+    { label:"Độ ẩm (%)", data:[], borderColor:COL.h, backgroundColor:COL.h, yAxisID:"yH", pointRadius:0, tension:.3, borderWidth:2 },
+    { ...hline(32, COL.t, "Giới hạn 32 °C"), yAxisID:"yT" } ]},
+  options:{ maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
+    scales:{ x:{ticks:{maxTicksLimit:7}}, yT:{position:"left",suggestedMin:20,suggestedMax:36}, yH:{position:"right",min:30,max:100,grid:{drawOnChartArea:false}} },
+    plugins:{ legend:{labels:{boxWidth:12,font:{size:11}}} } }
+});
+
+const ALERT_TYPES = { NGUY_HIEM:["Vượt 85 dBA",COL.danger], KHAN_CAP:["Vượt 115 dBA",COL.crit], LIEU_ON:["Liều ồn ≥ 100 %","#7c3aed"], NHIET:["Vi khí hậu vượt chuẩn",COL.t] };
+const alertChart = new Chart(document.getElementById("alertChart"), {
+  type:"doughnut",
+  data:{ labels:Object.values(ALERT_TYPES).map(a=>a[0]), datasets:[{ data:[0,0,0,0], backgroundColor:Object.values(ALERT_TYPES).map(a=>a[1]) }]},
+  options:{ maintainAspectRatio:false, plugins:{ legend:{position:"right"} } }
+});
+
+function makeGauge(id, colors) {
+  return new Chart(document.getElementById(id), { type:"doughnut",
+    data:{ datasets:[{ data:[0,1], backgroundColor:[colors,"#e5e7eb"], borderWidth:0 }]},
+    options:{ maintainAspectRatio:false, rotation:-90, circumference:180, cutout:"72%", plugins:{ legend:{display:false}, tooltip:{enabled:false} } } });
+}
+const gLeq = makeGauge("gLeq", COL.safe), gDose = makeGauge("gDose", "#7c3aed");
+function setGauge(g, v, min, max, color){ const x=Math.max(0,Math.min(v-min,max-min)); g.data.datasets[0].data=[x,(max-min)-x]; g.data.datasets[0].backgroundColor=[color,"#e5e7eb"]; g.update(); }
+
+/* ===================== 4. CẬP NHẬT GIAO DIỆN ===================== */
+function render(records, alerts) {
+  records = records.filter(r => r && r.timestamp && r.leq != null).sort((a,b)=>a.timestamp-b.timestamp).slice(-MAX_POINTS);
+  if (!records.length) return;
+  const labels = records.map(r => fmtTime(r.timestamp));
+  const L = records.map(r => +r.leq), last = records[records.length-1];
+  const st = (+last.lmax > MAXDB) ? "KHAN_CAP" : (last.status || zoneOf(+last.leq));
+  const [title,msg,color] = STATUS_TEXT[st] || STATUS_TEXT.AN_TOAN;
+
+  banner.style.background = color; bannerTitle.textContent = "TRẠNG THÁI: " + title; bannerMsg.textContent = msg;
+  if (last.device) devName.textContent = last.device;
+  vTime.textContent = fmtTime(last.timestamp);
+  vLeq.textContent = (+last.leq).toFixed(1); vLeq.style.color = zoneColor(+last.leq);
+  vLmax.textContent = (+last.lmax).toFixed(1); vLmax.style.color = +last.lmax > MAXDB ? COL.crit : "";
+  vDose.textContent = (+last.dose).toFixed(1); vDose.style.color = +last.dose >= 100 ? COL.danger : "";
+  vAllowed.textContent = fmtAllowed(+last.leq);
+  vTemp.textContent = last.temperature != null ? (+last.temperature).toFixed(1) : "--";
+  vHumi.textContent = last.humidity != null ? (+last.humidity).toFixed(0) : "--";
+  vTemp.style.color = (+last.temperature > 32 || +last.temperature < 18) ? COL.danger : "";
+  setGauge(gLeq, +last.leq, 30, 120, zoneColor(+last.leq)); gvLeq.textContent = (+last.leq).toFixed(1) + " dB";
+  setGauge(gDose, +last.dose, 0, 200, +last.dose >= 100 ? COL.danger : "#7c3aed"); gvDose.textContent = (+last.dose).toFixed(0) + " %";
+
+  // 1. Raw vs lọc
+  filterChart.data.labels = labels;
+  filterChart.data.datasets[0].data = records.map(r => +r.raw);
+  filterChart.data.datasets[1].data = L;
+  filterChart.data.datasets[2].data = labels.map(()=>LIMIT);
+  filterChart.data.datasets[3].data = labels.map(()=>WARN);
+  filterChart.update();
+
+  // 3. Liều ồn
+  doseChart.data.labels = labels;
+  doseChart.data.datasets[0].data = records.map(r => +(+r.dose).toFixed(1));
+  doseChart.data.datasets[1].data = labels.map(()=>100);
+  doseChart.update();
+
+  // 4. LAeq theo giờ (trung bình năng lượng)
+  const byHour = {};
+  records.forEach(r => { const k = new Date(r.timestamp).getHours().toString().padStart(2,"0")+"h"; (byHour[k] = byHour[k] || {v:[],ts:r.timestamp}).v.push(+r.leq); });
+  const hours = Object.keys(byHour).sort((a,b)=>byHour[a].ts-byHour[b].ts);
+  const hv = hours.map(k => +leqOf(byHour[k].v).toFixed(1));
+  hourChart.data.labels = hours; hourChart.data.datasets[0].data = hv;
+  hourChart.data.datasets[0].backgroundColor = hv.map(zoneColor);
+  hourChart.data.datasets[1].data = hours.map(()=>LIMIT);
+  hourChart.update();
+
+  // 5. Histogram
+  const bins = []; for (let b = 50; b < 110; b += 5) bins.push(b);
+  histChart.data.labels = bins.map(b => `${b}–${b+5}`);
+  histChart.data.datasets[0].data = bins.map(b => L.filter(v => v >= b && v < b+5).length);
+  histChart.data.datasets[0].backgroundColor = bins.map(b => zoneColor(b+2.5));
+  histChart.update();
+
+  // 6. Pie
+  pieChart.data.datasets[0].data = ZONES.map(z => L.filter(v => zoneOf(v) === z.key).length);
+  pieChart.update();
+
+  // 7. Vi khí hậu
+  climateChart.data.labels = labels;
+  climateChart.data.datasets[0].data = records.map(r => r.temperature);
+  climateChart.data.datasets[1].data = records.map(r => r.humidity);
+  climateChart.data.datasets[2].data = labels.map(()=>32);
+  climateChart.update();
+
+  // Thống kê ca
+  const shiftLeq = leqOf(L), over = L.filter(v=>v>=LIMIT).length;
+  statTable.innerHTML = `<tr><th>LAeq cả ca</th><th>Lmax</th><th>% thời gian ≥85</th><th>Số lần đo</th></tr>
+    <tr><td style="color:${zoneColor(shiftLeq)};font-weight:700">${shiftLeq.toFixed(1)} dBA</td><td>${Math.max(...records.map(r=>+r.lmax)).toFixed(1)}</td>
+    <td>${(over*100/L.length).toFixed(0)} %</td><td>${L.length}</td></tr>`;
+
+  // 8. Nhật ký cảnh báo
+  alerts = (alerts || []).sort((a,b)=>b.timestamp-a.timestamp);
+  alertChart.data.datasets[0].data = Object.keys(ALERT_TYPES).map(k => alerts.filter(a => a.type === k).length);
+  alertChart.update();
+  alertTable.querySelector("tbody").innerHTML = alerts.slice(0,8).map(a => { const t = ALERT_TYPES[a.type] || [a.type,"#6b7280"];
+    return `<tr><td>${fmtTime(a.timestamp)}</td><td><span class="tag" style="background:${t[1]}">${t[0]}</span></td><td>${a.value}</td><td style="text-align:left">${a.message}</td></tr>`; }).join("");
+}
+function setStatus(ok, text){ dot.className = "dot" + (ok ? " on" : ""); statusText.textContent = text; }
+
+/* ===================== 5A. CHẾ ĐỘ FIREBASE ===================== */
+function startFirebase() {
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  let hist = [], alerts = [];
+  db.ref(".info/connected").on("value", s => setStatus(s.val(), s.val() ? "Đã kết nối Firebase" : "Mất kết nối Firebase"));
+  db.ref("factory/history").orderByChild("timestamp").limitToLast(MAX_POINTS).on("value", snap => {
+    hist = []; snap.forEach(c => { hist.push(c.val()); }); render(hist, alerts);
+  });
+  db.ref("factory/alerts").orderByChild("timestamp").limitToLast(50).on("value", snap => {
+    alerts = []; snap.forEach(c => { alerts.push(c.val()); }); render(hist, alerts);
+  });
+}
+
+/* ===================== 5B. CHẾ ĐỘ DEMO: mô phỏng 1 ca 06:00–18:00 (5 phút/điểm) ===================== */
+function startDemo() {
+  setStatus(true, "Chế độ DEMO – dữ liệu mô phỏng");
+  let seed = 11; const rnd = () => (seed = (seed*9301+49297)%233280)/233280;   // số ngẫu nhiên có hạt giống
+  const day = new Date(); day.setHours(6,0,0,0);
+  const step = 5*60*1000, data = [], alerts = [];
+  let dose = 0, prev = "AN_TOAN", doseAlerted = false;
+  const target = h => (h < 7) ? 72 : (h < 11.5) ? 85 + 2.5*Math.sin(h*2.1) : (h < 13) ? 68 : (h < 17) ? 87.5 + 2.5*Math.sin(h*1.7) : 75;
+  function makePoint(i) {
+    const ts = day.getTime() + i*step, h = 6 + i*5/60;
+    const leq = target(h) + (rnd()-.5)*3;
+    let raw = leq + (rnd()-.5)*6; if (rnd() < 0.18) raw += 8 + rnd()*14;              // xung va đập
+    let lmax = Math.max(raw, leq + 6 + rnd()*10); if (i === 89) lmax = 116.4;             // 1 sự kiện vượt 115 dBA
+    if (leq >= 80) dose += (5/60) / allowedHours(leq) * 100;
+    const temp = 27 + 6*Math.sin((h-8)/12*Math.PI) + (rnd()-.5)*.6, humi = 78 - 1.8*(temp-27) + (rnd()-.5)*2;
+    const st = lmax > MAXDB ? "KHAN_CAP" : zoneOf(leq);
+    if ((st === "NGUY_HIEM" || st === "KHAN_CAP") && st !== prev)
+      alerts.push({ type:st, value:+(st==="KHAN_CAP"?lmax:leq).toFixed(1), message: st==="KHAN_CAP" ? "Lmax vượt 115 dBA – kiểm tra máy dập" : "LAeq vượt 85 dBA – bắt buộc đeo bảo hộ", timestamp:ts });
+    if (dose >= 100 && !doseAlerted) { doseAlerted = true; alerts.push({ type:"LIEU_ON", value:100, message:"Liều ồn đạt 100 % – cần nghỉ/luân chuyển vị trí", timestamp:ts }); }
+    if (temp > 32 && (!data.length || data[data.length-1].temperature <= 32)) alerts.push({ type:"NHIET", value:+temp.toFixed(1), message:"Nhiệt độ vượt 32 °C (QCVN 26:2016)", timestamp:ts });
+    prev = st;
+    return { device:"xuong-dap-01", leq:+leq.toFixed(1), raw:+raw.toFixed(1), lmax:+lmax.toFixed(1), dose:+dose.toFixed(2),
+             temperature:+temp.toFixed(1), humidity:+humi.toFixed(1), status:st, timestamp:ts };
+  }
+  let i = 0; for (; i < MAX_POINTS - 30; i++) data.push(makePoint(i));        // dừng lúc ~15:30 rồi phát tiếp từng điểm
+  render(data, alerts);
+  setInterval(() => { if (i >= MAX_POINTS) return; data.push(makePoint(i++)); render(data, alerts); }, 3000);
+}
+
+DEMO ? startDemo() : startFirebase();
+</script>
+</body>
+</html>
