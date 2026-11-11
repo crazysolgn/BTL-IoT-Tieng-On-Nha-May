@@ -1,0 +1,6 @@
+Adafruit GFX Library
+Adafruit ILI9341
+Adafruit ST7735 and ST7789 Library
+Adafruit BusIO
+DHT sensor library
+Adafruit Unified Sensor

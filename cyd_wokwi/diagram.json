@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "author": "IoT Noise Monitor - CYD pin mapping",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-ili9341", "id": "lcd1", "top": -260, "left": 180, "rotate": 90, "attrs": {} },
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": -110, "left": -170, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": 150, "left": -150, "attrs": { "temperature": "30", "humidity": "65" } },
+    { "type": "wokwi-rgb-led", "id": "rgb1", "top": 180, "left": 180, "attrs": { "common": "anode" } },
+    { "type": "wokwi-buzzer", "id": "bz1", "top": 180, "left": 260, "attrs": { "volume": "0.1" } },
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 260, "left": -150, "attrs": { "color": "blue", "label": "BOOT" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "lcd1:VCC", "esp:3V3", "red", [] ],
+    [ "lcd1:GND", "esp:GND.2", "black", [] ],
+    [ "lcd1:SCK", "esp:14", "orange", [] ],
+    [ "lcd1:MOSI", "esp:13", "blue", [] ],
+    [ "lcd1:MISO", "esp:12", "purple", [] ],
+    [ "lcd1:CS", "esp:15", "green", [] ],
+    [ "lcd1:D/C", "esp:2", "yellow", [] ],
+    [ "lcd1:RST", "esp:EN", "gray", [] ],
+    [ "lcd1:LED", "esp:21", "white", [] ],
+    [ "pot1:VCC", "esp:3V3", "red", [] ],
+    [ "pot1:GND", "esp:GND.1", "black", [] ],
+    [ "pot1:SIG", "esp:35", "orange", [] ],
+    [ "dht1:VCC", "esp:3V3", "red", [] ],
+    [ "dht1:GND", "esp:GND.1", "black", [] ],
+    [ "dht1:SDA", "esp:27", "green", [] ],
+    [ "rgb1:COM", "esp:3V3", "red", [] ],
+    [ "rgb1:R", "esp:4", "red", [] ],
+    [ "rgb1:G", "esp:16", "green", [] ],
+    [ "rgb1:B", "esp:17", "blue", [] ],
+    [ "bz1:2", "esp:26", "purple", [] ],
+    [ "bz1:1", "esp:GND.2", "black", [] ],
+    [ "btn1:1.l", "esp:0", "blue", [] ],
+    [ "btn1:2.l", "esp:GND.1", "black", [] ]
+  ],
+  "dependencies": {}
+}
