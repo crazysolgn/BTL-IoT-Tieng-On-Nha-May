@@ -1,0 +1,16 @@
+# Arduino / PlatformIO
+build/
+.pio/
+*.bin
+*.elf
+# Python
+__pycache__/
+*.pyc
+.venv/
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+# Bí mật - không đưa lên GitHub
+secrets.h
+*.env
