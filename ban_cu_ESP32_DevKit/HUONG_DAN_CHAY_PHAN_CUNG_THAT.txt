@@ -1,0 +1,121 @@
+HƯỚNG DẪN CHẠY BÀI TẬP TRÊN PHẦN CỨNG THẬT
+Đề tài: Hệ thống IoT giám sát và lọc tiếng ồn trong nhà máy (ESP32 + Firebase)
+==========================================================================
+
+Code chạy phần cứng thật: thư mục  esp32_noise_real/esp32_noise_real.ino
+(Thư mục esp32_noise_monitor/ là bản mô phỏng Wokwi, không dùng cho mạch thật.)
+
+0. CẤU TRÚC THƯ MỤC
+-------------------
+  esp32_noise_real/      Code chạy PHẦN CỨNG THẬT (đã đặt sẵn DHT11)       <- dùng cái này
+  test_dht11/            Code test riêng DHT11 (nạp thử trước tiên)
+  esp32_noise_monitor/   Bản mô phỏng Wokwi (sketch.ino, diagram.json, libraries.txt)
+  web_dashboard/         Trang web dashboard + Firebase Rules
+  filter_experiment/     Thực nghiệm bộ lọc bằng Python (kết quả .csv, .png)
+  DANH_SACH_THIET_BI.txt                  Danh sách linh kiện cần mua
+
+  Thứ tự làm: (1) nạp test_dht11 kiểm tra DHT11  ->  (2) tạo Firebase  ->  (3) sửa cấu hình
+  esp32_noise_real  ->  (4) hiệu chuẩn micro  ->  (5) chạy chính thức + mở dashboard.
+
+
+
+1. NỐI DÂY
+----------
+  Micro MAX4466 :  VCC -> 3V3     GND -> GND     OUT -> GPIO34 (chân D34)
+  DHT11 (module):  VCC (+) -> 3V3  GND (-) -> GND  DATA (S/OUT) -> GPIO15 (D15)
+  LED xanh      :  GPIO25 -> điện trở 220 Ω -> chân DÀI của LED ; chân NGẮN -> GND
+  LED vàng      :  GPIO26 -> điện trở 220 Ω -> chân DÀI ; chân NGẮN -> GND
+  LED đỏ        :  GPIO27 -> điện trở 220 Ω -> chân DÀI ; chân NGẮN -> GND
+  Còi buzzer    :  (+) -> GPIO14 ; (-) -> GND
+  DHT11 loại rời 4 chân (không có mạch đế): chân1 VCC, chân2 DATA, chân3 bỏ trống, chân4 GND,
+         BẮT BUỘC thêm điện trở 10 kΩ nối giữa chân 1 (VCC) và chân 2 (DATA).
+  Kiểm tra chip: ESP32-WROOM-32 / WROVER dùng nguyên code. ESP32-S3 / C3 KHÔNG có GPIO34 -> phải đổi chân micro.
+  Lưu ý: tất cả cảm biến dùng 3V3, KHÔNG dùng 5V (VIN) vì chân ADC ESP32 chỉ chịu 3.3 V.
+         Còi có thể kêu "tách" 1 tiếng lúc khởi động – bình thường.
+
+
+2. CÀI ARDUINO IDE
+------------------
+  a) Tải Arduino IDE 2 tại arduino.cc/en/software, cài đặt.
+  b) File > Preferences > "Additional boards manager URLs", dán:
+       https://espressif.github.io/arduino-esp32/package_esp32_index.json
+  c) Tools > Board > Boards Manager, tìm "esp32" > cài "esp32 by Espressif Systems".
+  d) Sketch > Include Library > Manage Libraries, cài:
+       - "DHT sensor library" (Adafruit)  -> chọn "Install all" để cài kèm "Adafruit Unified Sensor"
+  e) Cắm ESP32 bằng cáp USB có truyền dữ liệu. Nếu máy không hiện cổng COM, cài driver
+     CP210x (silabs.com) hoặc CH340 tùy chip trên board.
+  f) Tools > Board > esp32 > "ESP32 Dev Module";  Tools > Port > chọn cổng COM của ESP32.
+
+
+3. TẠO FIREBASE
+---------------
+  a) console.firebase.google.com > Add project (vd: noise-factory), tắt Google Analytics.
+  b) Build > Realtime Database > Create Database > Singapore > Start in test mode.
+  c) Copy URL database (dạng https://...firebasedatabase.app).
+  d) Tab Rules: dán nội dung web_dashboard/database.rules.json > Publish.
+  e) Project settings (bánh răng) > General > Your apps > biểu tượng </> > đặt tên > Register app.
+     Copy khối firebaseConfig (apiKey, authDomain, databaseURL, projectId ...).
+
+
+4. SỬA CODE ESP32 (esp32_noise_real.ino, phần CẤU HÌNH)
+--------------------------------------------------------
+  #define WIFI_SSID      "ten wifi 2.4GHz cua ban"
+  #define WIFI_PASSWORD  "mat khau"
+  #define FIREBASE_URL   "URL o buoc 3c"      (KHÔNG có dấu / ở cuối)
+  #define DHT_TYPE       DHT11                (DHT22 nếu bạn mua DHT22)
+  #define BUZZER_ACTIVE  0                    (đổi 1 nếu còi của bạn là loại chủ động: cấp điện là kêu)
+
+
+5. HIỆU CHUẨN MICRO (làm 1 lần, khoảng 10 phút)
+-----------------------------------------------
+  a) Đặt  #define CAL_MODE 1 , bấm Upload (mũi tên). Nếu báo "Connecting...." lâu thì giữ nút BOOT
+     trên ESP32 đến khi bắt đầu nạp.
+  b) Mở Tools > Serial Monitor, chọn 115200 baud. Mỗi giây sẽ in "Vpp TB = ... V".
+  c) Vặn biến trở nhỏ sau lưng MAX4466 (gain): khi để im lặng Vpp nhỏ (~0.01–0.05 V);
+     khi vỗ tay mạnh sát micro Vpp KHÔNG được chạm ~3.2 V (nếu chạm là quá khuếch đại -> vặn giảm).
+  d) Cài app đo dB trên điện thoại (vd "Sound Meter", "Decibel X"). Bật một nguồn ồn ỔN ĐỊNH
+     to vừa (loa phát tiếng ồn trắng/nhạc to, quạt, máy hút bụi), đặt điện thoại sát micro.
+  e) Đọc số dB trên app (vd 78 dB) và Vpp TB trên Serial (vd 0.42 V), điền:
+       #define CAL_DB   78.0
+       #define CAL_VPP  0.42
+  f) (Kiểm tra) đổi mức ồn khác, số "dB (theo CAL hien tai)" phải gần số trên app (lệch vài dB là bình thường).
+  g) Đặt  #define CAL_MODE 0 , Upload lại -> chạy chính thức.
+
+
+6. CHẠY CHÍNH THỨC
+------------------
+  - Serial Monitor in mỗi 10 s:  LAeq=..  Lmax=..  lieu=..%  T=..  H=..  TRANG_THAI  và "HTTP 200".
+  - LED: xanh (<80 dB), vàng (80–85), đỏ + còi bíp (>=85), còi kêu liên tục (Lmax >115).
+    Để thử: mở loa to sát micro / máy khoan / máy xay.
+  - Firebase Console > Realtime Database > Data: thấy nhánh factory/latest, history, alerts.
+  - Mất Wi-Fi: đèn và còi vẫn hoạt động, ESP32 tự kết nối lại mỗi 30 s.
+
+
+7. CHẠY WEB DASHBOARD
+---------------------
+  a) Mở web_dashboard/index.html bằng Notepad/VS Code, thay khối firebaseConfig bằng khối ở bước 3e.
+  b) Lưu, nhấp đúp file index.html để mở bằng Chrome. Góc phải hiện "Đã kết nối Firebase",
+     đồ thị cập nhật mỗi 10 s theo dữ liệu ESP32.
+  (Nếu chưa sửa firebaseConfig, trang chạy chế độ DEMO với dữ liệu mô phỏng.)
+
+
+7b. CHƯA CÓ MICRO? CHẠY THỬ BẰNG BIẾN TRỞ
+-----------------------------------------
+  - Nối biến trở 10 kΩ: chân 1 -> 3V3, chân giữa -> GPIO34, chân 3 -> GND.
+  - Trong esp32_noise_real.ino đổi  #define SIM_MODE 1 , nạp lại.
+  - Xoay biến trở = giả lập mức ồn 40–110 dB. DHT11, LED, còi, Firebase, dashboard đều chạy thật.
+  - Khi có micro MAX4466: đổi lại SIM_MODE 0 và làm bước hiệu chuẩn (mục 5).
+
+
+8. LỖI THƯỜNG GẶP
+-----------------
+  - "Loi doc DHT" / nhiệt độ null : kiểm tra dây DATA vào GPIO15, đúng DHT_TYPE.
+  - HTTP 401 / 403   : Rules chưa ở chế độ cho phép ghi (bước 3d) hoặc sai FIREBASE_AUTH.
+  - HTTP -1 / 404    : sai FIREBASE_URL (thừa "/" cuối, sai tên project) hoặc không có Internet.
+  - Không kết nối Wi-Fi : Wi-Fi phải 2.4 GHz; sai mật khẩu; tên Wi-Fi có dấu tiếng Việt nên đổi.
+  - dB luôn ~30 hoặc không đổi : sai chân OUT (phải GPIO34), micro cấp 3V3 chưa chắc, chưa vặn gain.
+  - dB luôn rất cao : gain quá lớn (Vpp chạm 3.2 V) -> vặn giảm rồi hiệu chuẩn lại.
+  - Web trắng/không cập nhật: sai firebaseConfig; nhấn F12 > Console để xem lỗi.
+
+Lưu ý: micro giá rẻ không có bộ lọc trọng số A chuẩn nên số dBA chỉ là ước lượng phục vụ học tập,
+không thay thế máy đo âm chuẩn trong quan trắc môi trường lao động chính thức.
