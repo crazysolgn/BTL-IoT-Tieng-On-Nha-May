@@ -1,0 +1,5 @@
+﻿Phương án,RMSE (dB),Sai số lớn nhất (dB),Số mẫu báo động giả,Thời gian báo động giả (s),Sai số LAeq TB (dB),Sai số LAeq lớn nhất (dB),Độ trễ đáp ứng (s),Số cửa sổ 10 s phân loại sai (/60)
+Không lọc (raw),5.33,27.5,96,19.2,8.18,14.20,0.0,18
+Chỉ EMA,2.29,14.0,103,20.6,1.69,4.17,1.8,3
+Chỉ trung vị,1.68,18.1,7,1.4,0.70,3.97,0.6,1
+Trung vị + EMA (đề xuất),1.41,17.7,15,3.0,0.51,4.41,2.8,2
