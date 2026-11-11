@@ -1,0 +1,138 @@
+HƯỚNG DẪN CHẠY BÀI TẬP TRÊN MẠCH ESP32-2432S028R ("CHEAP YELLOW DISPLAY" - CYD)
+Đề tài: Hệ thống IoT giám sát và lọc tiếng ồn trong nhà máy (ESP32 + Firebase)
+===============================================================================
+
+0. CẤU TRÚC THƯ MỤC
+-------------------
+  test_cyd_phan_cung/    (1) NẠP ĐẦU TIÊN: test màn hình, LED RGB, loa, DHT11, micro
+  cyd_noise_monitor/     (2) CHƯƠNG TRÌNH CHÍNH cho mạch CYD                     <- dùng cái này
+  cyd_wokwi/             Mô phỏng Wokwi nối đúng chân CYD (ESP32 + ILI9341 + LED RGB)
+  web_dashboard/         Trang web dashboard + Firebase Rules
+  filter_experiment/     Thực nghiệm bộ lọc bằng Python
+  docs/DANH_SACH_THIET_BI.txt              Linh kiện cần mua
+  ban_cu_ESP32_DevKit/   Bản cũ cho ESP32 DevKit thường (không dùng cho CYD)
+
+  Thứ tự: nối dây -> cài Arduino IDE -> nạp test_cyd_phan_cung -> tạo Firebase
+          -> sửa cấu hình cyd_noise_monitor -> hiệu chuẩn micro -> chạy chính thức + dashboard
+
+
+1. NỐI DÂY
+----------
+  Mạch CYD chỉ có 3 chân trống, đưa ra 2 cổng JST 1.25 mm 4 chân ở cạnh mạch:
+     Cổng P3 : GND | IO35 | IO22 | IO21     (IO21 là đèn nền màn hình -> KHÔNG dùng)
+     Cổng CN1: GND | IO22 | IO27 | 3V3
+  Dây JST 4 chân thường có sẵn trong hộp mạch (một đầu JST, một đầu chân cắm Dupont).
+
+  Micro MAX4466 : OUT -> IO35 (cổng P3)
+                  GND -> GND  (cổng P3)
+                  VCC -> 3V3  (cổng CN1)
+  DHT11         : DATA -> IO27 (cổng CN1)
+                  VCC  -> 3V3  (cổng CN1)
+                  GND  -> GND  (cổng CN1)
+  Loa 8 Ω       : cắm vào cổng SPEAK / P4 (2 chân, cạnh dưới mạch) - tùy chọn
+
+  * Cổng CN1 chỉ có 1 chân 3V3 mà micro và DHT11 đều cần -> cắm dây 3V3 của CN1 vào 1 hàng
+    breadboard mini, rồi lấy VCC cho micro và DHT11 từ hàng đó (GND làm tương tự nếu cần).
+  * DHT11 loại rời 4 chân: thêm điện trở 10 kΩ giữa VCC và DATA. Loại module 3 chân: không cần.
+  * Không cần nối: màn hình, LED RGB, nút BOOT - đều có sẵn trên mạch.
+  * Cấp nguồn và nạp code qua cổng USB của mạch (micro-USB hoặc USB-C đều được).
+
+
+2. CÀI ARDUINO IDE
+------------------
+  a) Tải Arduino IDE 2 (arduino.cc/en/software).
+  b) File > Preferences > "Additional boards manager URLs":
+       https://espressif.github.io/arduino-esp32/package_esp32_index.json
+  c) Tools > Board > Boards Manager > tìm "esp32" > cài "esp32 by Espressif Systems".
+  d) Sketch > Include Library > Manage Libraries, cài (chọn "Install all" nếu được hỏi):
+       - Adafruit GFX Library
+       - Adafruit ILI9341
+       - Adafruit ST7735 and ST7789 Library
+       - DHT sensor library (Adafruit)
+  e) Mạch CYD dùng chip USB CH340: nếu Windows không hiện cổng COM, cài driver CH340.
+  f) Tools > Board > esp32 > "ESP32 Dev Module";  Tools > Port > cổng COM của mạch.
+     Nếu nạp lỗi, đổi Tools > Upload Speed = 115200. Nếu kẹt ở "Connecting....", giữ nút BOOT.
+
+
+3. NẠP test_cyd_phan_cung (xác định loại màn hình)
+-------------------------------------------------
+  Mạch CYD có 2 loại màn hình tùy lô sản xuất:
+     - bản 1 cổng micro-USB: thường là ILI9341      -> DISPLAY_DRIVER 1
+     - bản 2 cổng (micro-USB + USB-C, như ảnh của bạn): thường là ST7789 -> DISPLAY_DRIVER 2
+  Nạp test, mở Serial Monitor 115200 và nhìn màn hình:
+     - Đen / trắng xóa / sọc nhiễu        -> đổi DISPLAY_DRIVER (1 <-> 2), nạp lại
+     - Có chữ nhưng 4 ô màu không đúng thứ tự ĐỎ - XANH LÁ - XANH DƯƠNG - TRẮNG
+                                            -> đổi INVERT_COLORS (0 <-> 1)
+     - Chữ lộn ngược                         -> đổi ROTATION (1 <-> 3)
+  Đồng thời test sẽ: nháy LED RGB đỏ -> xanh lá -> xanh dương, loa bíp 3 lần,
+  hiện nhiệt độ/độ ẩm DHT11 và Vpp của micro (vỗ tay gần micro thì Vpp phải tăng).
+  GHI LẠI 3 giá trị DISPLAY_DRIVER, INVERT_COLORS, ROTATION đúng.
+
+
+4. TẠO FIREBASE
+---------------
+  a) console.firebase.google.com > Add project (vd noise-factory), tắt Google Analytics.
+  b) Build > Realtime Database > Create Database > Singapore > Start in test mode.
+  c) Copy URL database (https://...firebasedatabase.app).
+  d) Tab Rules: dán nội dung web_dashboard/database.rules.json > Publish.
+  e) Project settings > General > Your apps > biểu tượng </> > Register app > copy khối firebaseConfig.
+
+
+5. SỬA cyd_noise_monitor.ino (chỉ phần CẤU HÌNH ở đầu file)
+-----------------------------------------------------------
+  #define WIFI_SSID       "ten wifi 2.4GHz"
+  #define WIFI_PASSWORD   "mat khau"
+  #define FIREBASE_URL    "URL o buoc 4c"        (không có "/" cuối)
+  #define DISPLAY_DRIVER  ...  #define INVERT_COLORS ...  #define ROTATION ...   (giá trị ở bước 3)
+  #define SOUND_ALARM     1                      (0 nếu không có loa / muốn tắt tiếng)
+  Các chân đã đúng cho CYD, không cần sửa.
+
+
+6. HIỆU CHUẨN MICRO (1 lần)
+---------------------------
+  a) Đặt #define CAL_MODE 1, nạp. Màn hình hiện "CHE DO HIEU CHUAN" và Vpp.
+  b) Vặn biến trở nhỏ sau lưng MAX4466: vỗ tay mạnh sát micro, Vpp KHÔNG được chạm ~3.2 V.
+  c) App đo dB trên điện thoại (Sound Meter / Decibel X) đặt sát micro, bật nguồn ồn ổn định
+     (loa phát tiếng ồn trắng, quạt, máy hút bụi). Ghi số dB trên app và Vpp trên màn hình:
+       #define CAL_DB   78.0      (ví dụ)
+       #define CAL_VPP  0.42      (ví dụ)
+  d) Đặt CAL_MODE 0, nạp lại -> chạy chính thức.
+
+
+7. CHẠY CHÍNH THỨC
+------------------
+  Màn hình: thanh trạng thái màu (AN TOAN / CANH BAO / NGUY HIEM / KHAN CAP), LAeq chữ lớn,
+            Lmax, liều ồn ca, nhiệt độ/độ ẩm, giá trị đo trực tiếp, đồ thị 10 phút gần nhất.
+  LED RGB : xanh lá (<80 dB), vàng (80–85), đỏ (>=85). Xanh dương = đang khởi động.
+  Loa     : bíp ngắn mỗi 10 s khi >=85 dB, kêu dài khi Lmax >115 dB.
+  Nút BOOT: GIỮ 2 GIÂY để đặt lại liều ồn khi bắt đầu ca mới.
+  Mất Wi-Fi: màn hình báo "WiFi: mat", vẫn đo + cảnh báo, tự kết nối lại mỗi 30 s.
+  Thử: mở nhạc/tiếng ồn trắng thật to gần micro, máy khoan, máy xay...
+
+
+8. WEB DASHBOARD
+----------------
+  Mở web_dashboard/index.html bằng Notepad, thay khối firebaseConfig bằng khối ở bước 4e, lưu,
+  nhấp đúp để mở bằng Chrome. Góc phải hiện "Đã kết nối Firebase", đồ thị cập nhật mỗi 10 s.
+  (Chưa sửa firebaseConfig thì trang chạy chế độ DEMO.)
+
+
+9. CHƯA CÓ MICRO? CHẠY THỬ BẰNG BIẾN TRỞ
+----------------------------------------
+  Biến trở 10 kΩ: chân 1 -> 3V3 (CN1), chân giữa -> IO35 (P3), chân 3 -> GND.
+  Đặt #define SIM_MODE 1, nạp. Xoay biến trở = mức ồn 40–110 dB (có xung nhiễu giả lập).
+
+
+10. LỖI THƯỜNG GẶP
+------------------
+  - Màn hình trắng/đen sau khi nạp       : sai DISPLAY_DRIVER -> chạy lại bước 3.
+  - Màu sai (đỏ thành xanh ngọc...)       : đổi INVERT_COLORS.
+  - DHT11 hiện "-- C -- %" / Serial lỗi   : dây DATA phải vào IO27 (cổng CN1); loại 4 chân cần 10 kΩ.
+  - dB luôn ~30 hoặc không đổi            : OUT micro phải vào IO35 (cổng P3); kiểm tra 3V3, gain.
+  - dB luôn rất cao                       : gain MAX4466 quá lớn -> vặn giảm, hiệu chuẩn lại.
+  - HTTP 401/403                          : Rules chưa cho phép ghi (bước 4d).
+  - HTTP -1/404                           : sai FIREBASE_URL hoặc không có Internet.
+  - Không vào Wi-Fi                       : chỉ hỗ trợ 2.4 GHz; kiểm tra mật khẩu.
+  - Loa không kêu                         : loa cắm đúng cổng SPEAK/P4; SOUND_ALARM = 1.
+
+Lưu ý: micro giá rẻ không có bộ lọc trọng số A chuẩn, số dBA chỉ là ước lượng phục vụ học tập.

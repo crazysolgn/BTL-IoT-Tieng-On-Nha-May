@@ -1,0 +1,16 @@
+DANH SÁCH THIẾT BỊ - PHIÊN BẢN MẠCH ESP32-2432S028R (CYD)  (giá tham khảo, kiểm tra lại khi mua)
+==============================================================================================
+ #  Thiết bị                                    SL    Giá tham khảo  Ghi chú
+ 1  Mạch ESP32-2432S028R (CYD) màn hình 2.8"    1     (bạn đã có)    Có sẵn ESP32, màn hình, LED RGB, mạch loa, nút BOOT
+ 2  Module micro MAX4466                        1     50–80k         Loại có biến trở chỉnh gain
+ 3  Module DHT11 (3 chân)                       1     (bạn đã có)    Loại 4 chân rời: mua thêm 1 điện trở 10 kΩ
+ 4  Dây JST 1.25 mm 4 chân (1 đầu Dupont)       2     10–20k         Thường có sẵn trong hộp CYD; cắm cổng P3 và CN1
+ 5  Breadboard mini (170 lỗ)                    1     8–15k          Chia chân 3V3/GND cho micro và DHT11
+ 6  Dây cắm Dupont đực–cái, đực–đực             1 bó  15–25k
+ 7  Loa 8 Ω 1–2 W, đầu JST 1.25 mm 2 chân       1     15–30k         Tùy chọn, cắm cổng SPEAK/P4
+ 8  Cáp USB có truyền dữ liệu                   1     20–40k         micro-USB hoặc USB-C (mạch của bạn có cả 2)
+ 9  (Tùy chọn) Biến trở 10 kΩ                   1     3–5k           Chạy thử khi chưa có micro
+
+ KHÔNG cần mua nữa: ESP32 DevKit, LED rời, điện trở 220 Ω, còi buzzer, breadboard lớn (đã có trên mạch CYD).
+ Cần mua thêm tối thiểu: micro MAX4466 (+ breadboard mini, dây) ≈ 70–120k. Có loa thì thêm 15–30k.
+ Không cần mua: máy tính, Wi-Fi 2.4 GHz, app đo dB trên điện thoại (Sound Meter / Decibel X).
